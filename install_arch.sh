@@ -1,37 +1,44 @@
-declare ROOT_PASSWORD = "password0"
-declare USERNAME = "user"
-declare USR_PASSWORD = "password1"
-declare HOST_NAME = "host name"
-declare PARTITION_NAME = "Arch Linux"
-declare PARTITION_DEVICE = "/dev/nvme0n1p4"
-declare ESP_NAME = "Arch Boot"
-declare ESP_DEVICE = "/dev/nvme0n1p3"
-declare REGION = "America"
-declare CITY = "Denver"
-declare BOOTMANAGER = $1
+#!/bin/bash
+declare ROOT_PASSWORD="password0"
+declare USERNAME="username"
+declare USR_PASSWORD="password1"
+declare HOST_NAME="host name"
+declare PARTITION_NAME="Arch Linux"
+declare PARTITION_DEVICE="/dev/nvme0n1p4"
+declare ESP_NAME="Arch Boot"
+declare ESP_DEVICE="/dev/nvme0n1p3"
+declare REGION="America"
+declare CITY="Denver"
+declare BOOTMANAGER=$1
 
 # set bootmanager flag
-if [$BOOTMANAGER == "systemd"]
-then
-    declare BOOTMANAGER = 0
-elif [$BOOTMANAGER == "grub"]
-then
-    declare BOOTMANAGER = 1
+if [ $BOOTMANAGER == "systemd" ];then
+    declare BOOTMANAGER=0
+elif [ $BOOTMANAGER == "grub" ];then
+    declare BOOTMANAGER=1
 else
-then
     echo "Usage: install_arch [systemd | grub]"
     exit 1
 fi
 
 # format the main partition and mount it
-mkfs.ext4 -L $PARTITION_NAME /dev/partition_label
+echo "ARCH_INSTALL:: Unmounting, formatting, and remounting ${PARTITION_DEVICE}..."
+umount -q $ESP_DEVICE # just in case part 1
+umount -q $PARTITION_DEVICE # just in case part 2
+mkfs.ext4 -q -L "$PARTITION_NAME" $PARTITION_DEVICE
 mkdir -p /mnt/boot
 mount $PARTITION_DEVICE /mnt
 
-# set up pacman --noconfirm keys
+# set up pacman keys
+# TODO fix broken pacman config process
+echo "ARCH_INSTALL:: Setting up pacman for mbp packages..."
+touch /mnt/etc/pacman.conf
+echo "[mbp]" >> /mnt/etc/pacman.conf
+echo "Server = https://dl.t2linux.org/mbp/x86_64" >> /mnt/etc/pacman.conf
+echo "IgnorePkg = linux linux-headers" >> /mnt/etc/pacman.conf
 pacman -Syy
 pacman --noconfirm -S wget
-wget http://dl.t.t2linux.org/archlinux/key.asc
+wget http://dl.t2linux.org/archlinux/key.asc
 pacman-key --add key.asc
 pacman-key --finger 7F9B8FC29F78B339
 pacman-key --lsign-key 7F9B8FC29F78B339
@@ -40,15 +47,17 @@ rm key.asc
 # pacstrap
 pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db
 
+# TODO test everything past here!
+
 # chroot, set up root, user account, hfsprogs, esp
 arch-chroot /mnt /bin/bash << "EOT"
 
-echo $ROOT_PASSWORD | passwd --stdin
+echo "root:$ROOT_PASSWORD" | chpasswd
 useradd -m -g users -G wheel,storage,power -s /bin/zsh $USERNAME
-echo $USR_PASSWORD | passwd MYUSERNAME --stdin
+echo "$USERNAME:$USR_PASSWORD" | chpasswd
 echo "${USERNAME} ALL = (ALL) NOPASSWD: ALL" >> /etc/sudoers
 su $USERNAME -c git clone https://aur.archlinux.org/hfsprogs.git && cd hfsplus && makepkg -si
-mkfs.hfsplus -v $ESP_NAME $ESP_DEVICE
+mkfs.hfsplus -v "$ESP_NAME" $ESP_DEVICE
 su $USERNAME -c git clone https://aur.archlinux.org/aic94xx-firmware.git && cd aic94xx-firmware && makepkg -si
 su $USERNAME -c git clone https://aur.archlinux.org/wd719x-firmware.git && cd wd719x-firmware && makepkg -si
 su $USERNAME -c git clone https://aur.archlinux.org/upd72020x-fw.git && cd upd72020x-fw && makepkg -si

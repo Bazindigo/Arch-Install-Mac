@@ -14,6 +14,23 @@ declare CITY="Denver"
 # leave these ones alone
 declare BOOTMANAGER=$1
 
+install_aur_pkg () {
+    rm -rf $1
+    git clone http://aur.archlinux.org/$1.git
+    cd $1
+    makepkg -si --noconfirm
+    cd ..
+    rm -rf $1
+}
+
+add_pacman_key () {
+    wget http://dl.t2linux.org/archlinux/key.asc
+    pacman-key --add key.asc
+    pacman-key --finger 7F9B8FC29F78B339
+    pacman-key --lsign-key 7F9B8FC29F78B339
+    rm key.asc
+}
+
 # set bootmanager flag
 if [ "$BOOTMANAGER" = "systemd" ];then
     declare BOOTMANAGER=0
@@ -23,6 +40,18 @@ else
     echo "Usage: install_arch [systemd | grub]"
     exit 1
 fi
+
+# export variables so they are accessible inside chrooted env
+echo ""
+echo "===> ARCH_INSTALL:: Exporting variables to chroot environment..."
+export USERNAME=$USERNAME
+export ROOT_PASSWORD=$ROOT_PASSWORD
+export USR_PASSWORD=$USR_PASSWORD
+export ESP_NAME=$ESP_NAME
+export ESP_DEVICE=$ESP_DEVICE
+export HOST_NAME=$HOST_NAME
+export -f install_aur_pkg
+export -f add_pacman_key
 
 # format the main partition and mount it
 echo ""
@@ -38,11 +67,7 @@ echo ""
 echo "===> ARCH_INSTALL:: Setting up pacman for mbp packages..."
 pacman -Syy
 pacman --noconfirm -S wget perl
-wget http://dl.t2linux.org/archlinux/key.asc
-pacman-key --add key.asc
-pacman-key --finger 7F9B8FC29F78B339
-pacman-key --lsign-key 7F9B8FC29F78B339
-mv key.asc /mnt/
+add_pacman_key
 
 # pacstrap
 echo ""
@@ -56,27 +81,11 @@ echo "[mbp]" >> /etc/pacman.conf
 echo "Server = http://dl.t2linux.org/archlinux/mbp/x86_64" >> /etc/pacman.conf
 echo "" >> /etc/pacman.conf
 echo "IgnorePkg = linux linux-headers" >> /etc/pacman.conf
-pacman-key --add key.asc
-pacman-key --finger 7F9B8FC29F78B339
-pacman-key --lsign-key 7F9B8FC29F78B339
-rm key.asc
+
+add_pacman_key
 pacman -Syy
 
-EOT
-
-# export variables so they are accessible inside chrooted env
-echo ""
-echo "===> ARCH_INSTALL:: Exporting variables to chroot environment..."
-export USERNAME=$USERNAME
-export ROOT_PASSWORD=$ROOT_PASSWORD
-export USR_PASSWORD=$USR_PASSWORD
-export ESP_NAME=$ESP_NAME
-export ESP_DEVICE=$ESP_DEVICE
-export HOST_NAME=$HOST_NAME
-
-# chroot, set up root, user account, hfsprogs, esp
-arch-chroot /mnt /bin/bash << "EOT"
-
+# set up root, user account, hfsprogs, esp
 echo ""
 echo "===> ARCH_INSTALL:: Setting locale..."
 echo LANG=en_US.UTF-8 >> /etc/locale.conf
@@ -98,22 +107,31 @@ echo "$USERNAME ALL = (ALL) NOPASSWD: ALL" >> /etc/sudoers
 echo ""
 echo "===> ARCH_INSTALL:: Unmounting, formatting, and remounting ${ESP_DEVICE}..."
 cd /home/$USERNAME
-rm -rf hfsprogs
-su $USERNAME -c "git clone https://aur.archlinux.org/hfsprogs.git && cd hfsprogs && makepkg -si --noconfirm"
-rm -rf hfsprogs
+
+su $USERNAME -c "install_aur_package hfsprogs"
+#the following 3 lines will hopefully be replaced by the line above this, just needs testing
+#rm -rf hfsprogs
+#su $USERNAME -c "git clone https://aur.archlinux.org/hfsprogs.git && cd hfsprogs && makepkg -si --noconfirm"
+#rm -rf hfsprogs
+
 su $USERNAME -c "mkfs.hfsplus -v \"$ESP_NAME\" $ESP_DEVICE"
 
 echo ""
 echo "===> ARCH_INSTALL:: Installing additional firmware modules..."
-rm -rf aic94xx-firmware
-rm -rf wd719x-firmware
-rm -rf upd72020x-fw
-su $USERNAME -c "git clone https://aur.archlinux.org/aic94xx-firmware.git && cd aic94xx-firmware && makepkg -si --noconfirm"
-rm -rf aic94xx-firmware
-su $USERNAME -c "git clone https://aur.archlinux.org/wd719x-firmware.git && cd wd719x-firmware && makepkg -si --noconfirm"
-rm -rf wd719x-firmware
-su $USERNAME -c "git clone https://aur.archlinux.org/upd72020x-fw.git && cd upd72020x-fw && makepkg -si --noconfirm"
-rm -rf upd72020x-fw
+#the following 9 lines will hopefully be replaced by the lines after that, just needs testing
+#rm -rf aic94xx-firmware
+#rm -rf wd719x-firmware
+#rm -rf upd72020x-fw
+#su $USERNAME -c "git clone https://aur.archlinux.org/aic94xx-firmware.git && cd aic94xx-firmware && makepkg -si --noconfirm"
+#rm -rf aic94xx-firmware
+#su $USERNAME -c "git clone https://aur.archlinux.org/wd719x-firmware.git && cd wd719x-firmware && makepkg -si --noconfirm"
+#rm -rf wd719x-firmware
+#su $USERNAME -c "git clone https://aur.archlinux.org/upd72020x-fw.git && cd upd72020x-fw && makepkg -si --noconfirm"
+#rm -rf upd72020x-fw
+
+su $USERNAME -c "install_aur_pkg aic94xx-firmware"
+su $USERNAME -c "install_aur_pkg wd719x-firmware"
+su $USERNAME -c "install_aur_pkg upd72020x-fw"
 
 EOT
 

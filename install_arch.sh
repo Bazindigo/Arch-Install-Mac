@@ -171,7 +171,7 @@ rm -rf /mbp2018-bridge-drv
 git clone https://github.com/MCMrARM/mbp2018-bridge-drv.git
 cd mbp2018-bridge-drv
 sed -i 's/$(shell uname -r)/$MBP_KERNEL/'
-sed -i 's/$(shell uname -r)/&MBP_kERNEL/'
+sed -i 's/$(shell uname -r)/$MBP_KERNEL/'
 make
 mkdir -p /usr/lib/modules/extramodules-mbp
 cp bce.ko -p /usr/lib/modules/extramodules-mbp/bce.ko

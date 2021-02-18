@@ -1,10 +1,16 @@
 # Installing Arch Linux on a Macbook Pro 2019
 ## Requirements
-* Macbook Pro 2019 16"
 * one partition for your linux installation
   * already partitioned from macOS or using a disk utility in the arch iso
 * one partition for your new EFI (different than the EFI partition already on your mac)
   * again, already partitioned from macOS or using a disk utility in arch iso
+* an Arch Linux installation USB
+  * if the ISO used was the regular ISO, then you will have to add the following group to `/etc/pacman.conf`:
+    ```
+    [mbp]
+    Server = https://packages.aunali1.com/archlinux/$repo/$arch
+    ```
+    * you also need to add `linux` and `linux-headers` to the `IgnorePkg` list earlier in the same file
 
 ## Steps
 1. Boot into arch iso from a USB
@@ -24,3 +30,4 @@
 5. If you want to install with systemd: `./install_arch.sh systemd`. 
     * If you want to install with GRUB: `./install_arch.sh grub`
 6. After any finishing touches on your install, `reboot` and hold option on startup. Select the new option in the menu.
+  * If this doesn't work, you may have to use the bless command from macOS and then try booting into it

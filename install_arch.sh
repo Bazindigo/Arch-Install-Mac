@@ -13,23 +13,7 @@ declare CITY="Denver"
 
 # leave these ones alone
 declare BOOTMANAGER=$1
-
-install_aur_pkg () {
-    rm -rf $1
-    git clone http://aur.archlinux.org/$1.git
-    cd $1
-    makepkg -si --noconfirm
-    cd ..
-    rm -rf $1
-}
-
-add_pacman_key () {
-    wget http://dl.t2linux.org/archlinux/key.asc
-    pacman-key --add key.asc
-    pacman-key --finger 7F9B8FC29F78B339
-    pacman-key --lsign-key 7F9B8FC29F78B339
-    rm key.asc
-}
+declare MBP_KERNEL="5.8.17-1-mbp"
 
 # set bootmanager flag
 if [ "$BOOTMANAGER" = "systemd" ];then
@@ -43,51 +27,41 @@ fi
 
 # export variables so they are accessible inside chrooted env
 echo ""
-echo "===> ARCH_INSTALL:: Exporting variables to chroot environment..."
+echo "===> ARCH_INSTALL:: (1/12) Exporting variables to chroot environment..."
 export USERNAME=$USERNAME
 export ROOT_PASSWORD=$ROOT_PASSWORD
 export USR_PASSWORD=$USR_PASSWORD
 export ESP_NAME=$ESP_NAME
 export ESP_DEVICE=$ESP_DEVICE
 export HOST_NAME=$HOST_NAME
-export -f install_aur_pkg
-export -f add_pacman_key
+export MBP_KERNEL=$MBP_KERNEL
 
 # format the main partition and mount it
 echo ""
-echo "===> ARCH_INSTALL:: Unmounting, formatting, and remounting ${PARTITION_DEVICE}..."
+echo "===> ARCH_INSTALL:: (2/12) Unmounting, formatting, and remounting ${PARTITION_DEVICE}..."
 umount -q $ESP_DEVICE # just in case part 1
 umount -q $PARTITION_DEVICE # just in case part 2
 mkfs.ext4 -q -L "$PARTITION_NAME" $PARTITION_DEVICE
 mkdir -p /mnt/boot
 mount $PARTITION_DEVICE /mnt
 
-# set up pacman keys
-echo ""
-echo "===> ARCH_INSTALL:: Setting up pacman for mbp packages..."
-pacman -Syy
-pacman --noconfirm -S wget perl
-add_pacman_key
-
 # pacstrap
 echo ""
-echo "ARCH_INSTALL:: Installing..."
-pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns apple-bce
+echo "===> ARCH_INSTALL:: (3/12) Installing..."
+pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns perl dkms
 
 # set up pacman on new system too
 arch-chroot /mnt /bin/bash << "EOT"
 
 echo "[mbp]" >> /etc/pacman.conf
-echo "Server = http://dl.t2linux.org/archlinux/mbp/x86_64" >> /etc/pacman.conf
+echo "Server = https://packages.aunali1.com/archlinux/$repo/$arch" >> /etc/pacman.conf
 echo "" >> /etc/pacman.conf
-echo "IgnorePkg = linux linux-headers" >> /etc/pacman.conf
-
-add_pacman_key
+sed -i 's/#IgnorePkg/IgnorePkg = linux linux-headers/' /etc/pacman.conf
 pacman -Syy
 
 # set up root, user account, hfsprogs, esp
 echo ""
-echo "===> ARCH_INSTALL:: Setting locale..."
+echo "===> ARCH_INSTALL:: (4/12) Setting locale..."
 echo LANG=en_US.UTF-8 >> /etc/locale.conf
 echo LANGUAGE=en_US >> /etc/locale.conf
 echo LC_ALL=C >> /etc/locale.conf
@@ -95,49 +69,41 @@ sed -i 's/#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
 locale-gen
 
 echo ""
-echo "===> ARCH_INSTALL:: Setting up user ${USERNAME}..."
+echo "===> ARCH_INSTALL:: (5/12) Setting up user ${USERNAME}..."
 
 echo root:${ROOT_PASSWORD} | chpasswd
 
 useradd -m -g users -G wheel,storage,power -s /bin/zsh -p $(perl -e 'print crypt($ARGV[0], "password")' '$USR_PASSWORD') $USERNAME
-#echo "$USERNAME:$USR_PASSWORD" | chpasswd
 
 echo "$USERNAME ALL = (ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 echo ""
-echo "===> ARCH_INSTALL:: Unmounting, formatting, and remounting ${ESP_DEVICE}..."
+echo "===> ARCH_INSTALL:: (6/12) Unmounting, formatting, and remounting ${ESP_DEVICE}..."
 cd /home/$USERNAME
 
-su $USERNAME -c "install_aur_package hfsprogs"
-#the following 3 lines will hopefully be replaced by the line above this, just needs testing
-#rm -rf hfsprogs
-#su $USERNAME -c "git clone https://aur.archlinux.org/hfsprogs.git && cd hfsprogs && makepkg -si --noconfirm"
-#rm -rf hfsprogs
+rm -rf hfsprogs
+su $USERNAME -c "git clone https://aur.archlinux.org/hfsprogs.git && cd hfsprogs && makepkg -si --noconfirm"
+rm -rf hfsprogs
 
 su $USERNAME -c "mkfs.hfsplus -v \"$ESP_NAME\" $ESP_DEVICE"
 
 echo ""
-echo "===> ARCH_INSTALL:: Installing additional firmware modules..."
-#the following 9 lines will hopefully be replaced by the lines after that, just needs testing
-#rm -rf aic94xx-firmware
-#rm -rf wd719x-firmware
-#rm -rf upd72020x-fw
-#su $USERNAME -c "git clone https://aur.archlinux.org/aic94xx-firmware.git && cd aic94xx-firmware && makepkg -si --noconfirm"
-#rm -rf aic94xx-firmware
-#su $USERNAME -c "git clone https://aur.archlinux.org/wd719x-firmware.git && cd wd719x-firmware && makepkg -si --noconfirm"
-#rm -rf wd719x-firmware
-#su $USERNAME -c "git clone https://aur.archlinux.org/upd72020x-fw.git && cd upd72020x-fw && makepkg -si --noconfirm"
-#rm -rf upd72020x-fw
-
-su $USERNAME -c "install_aur_pkg aic94xx-firmware"
-su $USERNAME -c "install_aur_pkg wd719x-firmware"
-su $USERNAME -c "install_aur_pkg upd72020x-fw"
+echo "===> ARCH_INSTALL:: (7/12) Installing additional modules..."
+rm -rf aic94xx-firmware
+rm -rf wd719x-firmware
+rm -rf upd72020x-fw
+su $USERNAME -c "git clone https://aur.archlinux.org/aic94xx-firmware.git && cd aic94xx-firmware && makepkg -si --noconfirm"
+rm -rf aic94xx-firmware
+su $USERNAME -c "git clone https://aur.archlinux.org/wd719x-firmware.git && cd wd719x-firmware && makepkg -si --noconfirm"
+rm -rf wd719x-firmware
+su $USERNAME -c "git clone https://aur.archlinux.org/upd72020x-fw.git && cd upd72020x-fw && makepkg -si --noconfirm"
+rm -rf upd72020x-fw
 
 EOT
 
 # mount esp and genfstab
 echo ""
-echo "===> ARCH_INSTALL:: Performing basic configuration..."
+echo "===> ARCH_INSTALL:: (8/12) Performing basic configuration..."
 mount $ESP_DEVICE /mnt/boot
 genfstab -pU /mnt >> /mnt/etc/fstab
 
@@ -156,18 +122,13 @@ echo "127.0.1.1 ${HOST_NAME}" >> /etc/hosts
 
 # pacman again
 echo ""
-echo "===> ARCH_INSTALL:: Regenerating images..."
-#pacman --noconfirm -S linux-mbp linux-mbp-headers linux-firmware intel-ucode
-#mkinitcpio -p linux-mbp
-echo ""
-echo ""
-echo $(ls -alF /boot)
-echo ""
-echo ""
+echo "===> ARCH_INSTALL:: (9/12) Regenerating images..."
+pacman --noconfirm -Sy dkms linux-mbp linux-mbp-headers linux-firmware intel-ucode
+mkinitcpio -p linux-mbp -k $MBP_KERNEL
 
 # set up chosen bootloader on esp
 echo ""
-echo "===> ARCH_INSTALL:: Installing bootloader..."
+echo "===> ARCH_INSTALL:: (10/12) Installing bootloader..."
 if [ $BOOTMANAGER==0 ];then
     echo "===> ARCH_INSTALL::     Using systemd"
     declare -x SYSTEMD_RELAX_ESP_CHECKS=1
@@ -189,19 +150,34 @@ fi
 
 # get nice icon for boot menu
 echo ""
-echo "===> ARCH_INSTALL:: Grabbing icon for Apple boot menu..."
+echo "===> ARCH_INSTALL:: (11/12) Grabbing icon for Apple boot menu..."
 wget -O /tmp/archlinux.svg https://archlinux.org/logos/archlinux-icon-crystal-64.svg
 rsvg-convert -w 128 -h 128 -o /tmp/archlogo.png /tmp/archlinux.svg
 png2icns /boot/.VolumeIcon.icns /tmp/archlogo.png
 rm /tmp/archlogo.png /tmp/archlinux.svg
 
-# TODO keyboard/touchpad
+# t2/keyboard/touchpad
 echo ""
-echo "===> Installing support for Apple T2 features..."
+echo "===> ARCH_INSTALL:: (12/12) Installing support for Apple T2 features..."
+rm -rf /usr/src/apple-ibridge-0.1
 git clone --branch mbp15 https://github.com/roadrunner2/macbook12-spi-driver.git /usr/src/apple-ibridge-0.1
-dkms install -m apple-ibridge -v 0.1
-modprobe apple-ib-tb
-modprobe apple-ib-als
+dkms install --no-depmod -m apple-ibridge -v 0.1 -k $MBP_KERNEL
+depmod $MBP_KERNEL
+modprobe -S $MBP_KERNEL -f apple-ib-tb
+modprobe -S $MBP_KERNEL -f apple-ib-als
+
+cd /
+rm -rf /mbp2018-bridge-drv
+git clone https://github.com/MCMrARM/mbp2018-bridge-drv.git
+cd mbp2018-bridge-drv
+sed -i 's/$(shell uname -r)/$MBP_KERNEL/'
+sed -i 's/$(shell uname -r)/&MBP_kERNEL/'
+make
+mkdir -p /usr/lib/modules/extramodules-mbp
+cp bce.ko -p /usr/lib/modules/extramodules-mbp/bce.ko
+touch /etc/modules-load.d/bce.conf
+echo "bce" >> /etc/modules-load.d/bce.conf
+rm -rf /mbp2018-bridge-drv
 
 # TODO wifi
 # TODO touchbar

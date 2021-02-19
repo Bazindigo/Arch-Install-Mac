@@ -158,7 +158,7 @@ rm /tmp/archlogo.png /tmp/archlinux.svg
 
 # t2/keyboard/touchpad
 echo ""
-echo "===> ARCH_INSTALL:: (12/12) Installing support for Apple T2 features..."
+echo "===> ARCH_INSTALL:: (12/12) Installing additional drivers..."
 rm -rf /usr/src/apple-ibridge-0.1
 git clone --branch mbp15 https://github.com/roadrunner2/macbook12-spi-driver.git /usr/src/apple-ibridge-0.1
 dkms install --no-depmod -m apple-ibridge -v 0.1 -k $MBP_KERNEL
@@ -170,13 +170,13 @@ cd /
 rm -rf /mbp2018-bridge-drv
 git clone https://github.com/MCMrARM/mbp2018-bridge-drv.git
 cd mbp2018-bridge-drv
-sed -i 's/$(shell uname -r)/$MBP_KERNEL/'
-sed -i 's/$(shell uname -r)/$MBP_KERNEL/'
+sed -i 's/$(shell uname -r)/$MBP_KERNEL/' Makefile
 make
 mkdir -p /usr/lib/modules/extramodules-mbp
 cp bce.ko -p /usr/lib/modules/extramodules-mbp/bce.ko
 touch /etc/modules-load.d/bce.conf
 echo "bce" >> /etc/modules-load.d/bce.conf
+modprobe -S $MBP_KERNEL -f bce
 rm -rf /mbp2018-bridge-drv
 
 # TODO wifi

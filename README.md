@@ -14,7 +14,7 @@
 
 ## Steps
 1. Boot into arch iso from a USB
-2. `pacman -Syy && pacman -S git`
+2. `pacman -Syy && pacman -S git glibc`
 3. `git clone https://github.com/Bazindigo/Arch-Install-Mac.git`
 4. edit script variables:
     * `ROOT_PASSWORD`: the password for root in your installation

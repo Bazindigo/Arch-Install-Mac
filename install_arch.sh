@@ -29,8 +29,8 @@ if [ "$BOOTMANAGER" = "systemd" ];then
 elif [ "$BOOTMANAGER" = "grub" ];then
     declare BOOTMANAGER=1
 else
-    echo "Usage: install_arch [systemd | grub]"
-    exit 1
+    echo "===> ARCH_INSTALL:: Bootloader not specified; defaulting to systemd";
+    declare BOOTMANAGER=0
 fi
 
 # export variables so they are accessible inside chrooted env
@@ -58,13 +58,13 @@ mount $PARTITION_DEVICE /mnt
 echo ""
 echo "===> ARCH_INSTALL:: (3/12) Installing..."
 add_pacman_key
-pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns perl dkms
+pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel dkms grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns perl
 
 # set up pacman on new system too
 arch-chroot /mnt /bin/bash << "EOT"
 
 echo "[mbp]" >> /etc/pacman.conf
-echo "Server = https://packages.aunali1.com/archlinux/$repo/$arch" >> /etc/pacman.conf
+echo "Server = https://packages.aunali1.com/archlinux/mbp/x86_64" >> /etc/pacman.conf
 echo "" >> /etc/pacman.conf
 sed -i 's/#IgnorePkg/IgnorePkg = linux linux-headers/' /etc/pacman.conf
 add_pacman_key
@@ -170,14 +170,12 @@ rm /tmp/archlogo.png /tmp/archlinux.svg
 # t2/keyboard/touchpad
 echo ""
 echo "===> ARCH_INSTALL:: (12/12) Installing additional drivers..."
-git clone --branch mbp15 https://github.com/roadrunner2/macbook12-spi-driver.git
-cd macbook12-spi-driver
-sed -i 's/KVERSION := $(KERNELRELEASE)/$MBP_KERNEL/' Makefile
-make
-modprobe -S $MBP_KERNEL -f industrialio_triggered_buffer
-insmod -f apple-ibridge.ko
-insmod -f apple-ib-tb.ko
-insmod -f apple-ib-als.ko
+rm -rf /usr/src/apple-ibridge-0.1
+git clone --branch mbp15 https://github.com/roadrunner2/macbook12-spi-driver.git /usr/src/apple-ibridge-0.1
+dkms install --no-depmod -m apple-ibridge -v 0.1 -k $MBP_KERNEL
+depmod $MBP_KERNEL
+modprobe -S $MBP_KERNEL -f apple-ib-tb
+modprobe -S $MBP_KERNEL -f apple-ib-als
 
 cd /
 rm -rf /mbp2018-bridge-drv
@@ -186,13 +184,12 @@ cd mbp2018-bridge-drv
 sed -i 's/$(shell uname -r)/$MBP_KERNEL/' Makefile
 make
 mkdir -p /usr/lib/modules/extramodules-mbp
-cp bce.ko -p /usr/lib/modules/extramodules-mbp/bce.ko
-touch /etc/modules-load.d/bce.conf
-echo "bce" >> /etc/modules-load.d/bce.conf
-modprobe -S $MBP_KERNEL -f bce
+cp bce.ko -p /usr/lib/modules/extramodules-mbp/bce.ko # don't know if this one works vs the next line
+cp bce.ko -p /usr/lib/modules/5.8.17-1-mbp/bce.ko
+echo "bce" > /etc/modules-load.d/bce.conf
 rm -rf /mbp2018-bridge-drv
 
-sed -i 's/MODULES=""/MODULES="bce apple-ibridge apple-ib-tb apple-ib-als"/' /etc/mkinitcpio.conf
+sed -i 's/MODULES=()/MODULES=(bce apple-ibridge apple-ib-tb apple-ib-als)/' /etc/mkinitcpio.conf
 echo "blacklist thunderbolt" >> /etc/modprobe.d/local-blacklist.conf           # blacklist thunderbolt module directly
 echo "install thunderbolt /bin/false" >> /etc/modprobe.d/local-blacklist.conf  # run /bin/false when thunderbolt is attempting to load
 mkinitcpio -p linux-mbp -k $MBP_KERNEL

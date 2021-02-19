@@ -35,7 +35,7 @@ fi
 
 # export variables so they are accessible inside chrooted env
 echo ""
-echo "===> ARCH_INSTALL:: (1/12) Exporting variables to chroot environment..."
+echo "===> ARCH_INSTALL:: (1/11) Exporting variables to chroot environment..."
 export USERNAME=$USERNAME
 export ROOT_PASSWORD=$ROOT_PASSWORD
 export USR_PASSWORD=$USR_PASSWORD
@@ -47,7 +47,7 @@ export -f add_pacman_key
 
 # format the main partition and mount it
 echo ""
-echo "===> ARCH_INSTALL:: (2/12) Unmounting, formatting, and remounting ${PARTITION_DEVICE}..."
+echo "===> ARCH_INSTALL:: (2/11) Unmounting, formatting, and remounting ${PARTITION_DEVICE}..."
 umount -q $ESP_DEVICE # just in case part 1
 umount -q $PARTITION_DEVICE # just in case part 2
 mkfs.ext4 -q -L "$PARTITION_NAME" $PARTITION_DEVICE
@@ -56,9 +56,13 @@ mount $PARTITION_DEVICE /mnt
 
 # pacstrap
 echo ""
-echo "===> ARCH_INSTALL:: (3/12) Installing..."
+echo "===> ARCH_INSTALL:: (3/11) Installing..."
 add_pacman_key
 pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel dkms grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns perl intel-ucode
+
+# copy scripts over so they are accessible inside chrooted env
+mkdir -p /mnt/arch-installer-scripts
+cp *.sh /mnt/arch-installer-scripts
 
 # set up pacman on new system too
 arch-chroot /mnt /bin/bash << "EOT"
@@ -72,7 +76,7 @@ pacman -Syy
 
 # set up root, user account, hfsprogs, esp
 echo ""
-echo "===> ARCH_INSTALL:: (4/12) Setting locale..."
+echo "===> ARCH_INSTALL:: (4/11) Setting locale..."
 echo LANG=en_US.UTF-8 >> /etc/locale.conf
 echo LANGUAGE=en_US >> /etc/locale.conf
 echo LC_ALL=C >> /etc/locale.conf
@@ -80,41 +84,18 @@ sed -i 's/#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
 locale-gen
 
 echo ""
-echo "===> ARCH_INSTALL:: (5/12) Setting up user ${USERNAME}..."
-
-echo root:${ROOT_PASSWORD} | chpasswd
-
-useradd -m -g users -G wheel,storage,power -s /bin/zsh -p $(perl -e 'print crypt($ARGV[0], "password")' '$USR_PASSWORD') $USERNAME
-
-echo "$USERNAME ALL = (ALL) NOPASSWD: ALL" >> /etc/sudoers
+echo "===> ARCH_INSTALL:: (5/11) Setting up user ${USERNAME}..."
+/arch-installer-scripts/config-user-root.sh
 
 echo ""
-echo "===> ARCH_INSTALL:: (6/12) Unmounting, formatting, and remounting ${ESP_DEVICE}..."
-cd /home/$USERNAME
-
-rm -rf hfsprogs
-su $USERNAME -c "git clone https://aur.archlinux.org/hfsprogs.git && cd hfsprogs && makepkg -si --noconfirm"
-rm -rf hfsprogs
-
-su $USERNAME -c "mkfs.hfsplus -v \"$ESP_NAME\" $ESP_DEVICE"
-
-echo ""
-echo "===> ARCH_INSTALL:: (7/12) Installing additional modules..."
-rm -rf aic94xx-firmware
-rm -rf wd719x-firmware
-rm -rf upd72020x-fw
-su $USERNAME -c "git clone https://aur.archlinux.org/aic94xx-firmware.git && cd aic94xx-firmware && makepkg -si --noconfirm"
-rm -rf aic94xx-firmware
-su $USERNAME -c "git clone https://aur.archlinux.org/wd719x-firmware.git && cd wd719x-firmware && makepkg -si --noconfirm"
-rm -rf wd719x-firmware
-su $USERNAME -c "git clone https://aur.archlinux.org/upd72020x-fw.git && cd upd72020x-fw && makepkg -si --noconfirm"
-rm -rf upd72020x-fw
-
+echo "===> ARCH_INSTALL:: (6/11) Unmounting, formatting, and remounting ${ESP_DEVICE}..."
+/arch-installer-scripts/hfsprogs-tool.sh
+mkfs.hfsplus -v \"$ESP_NAME\" $ESP_DEVICE
 EOT
 
 # mount esp and genfstab
 echo ""
-echo "===> ARCH_INSTALL:: (8/12) Performing basic configuration..."
+echo "===> ARCH_INSTALL:: (7/11) Performing basic configuration..."
 mount $ESP_DEVICE /mnt/boot
 genfstab -pU /mnt >> /mnt/etc/fstab
 
@@ -131,33 +112,32 @@ echo "127.0.0.1 localhost" >> /etc/hosts
 echo "::1 localhost" >> /etc/hosts
 echo "127.0.1.1 ${HOST_NAME}" >> /etc/hosts
 
-# pacman again
-echo ""
-echo "===> ARCH_INSTALL:: (9/12) Regenerating images..."
-#mkinitcpio -p linux-mbp -k $MBP_KERNEL # try without generating here for now in interest of efficiency
-
 # set up chosen bootloader on esp
 echo ""
-echo "===> ARCH_INSTALL:: (10/12) Installing bootloader..."
+echo "===> ARCH_INSTALL:: (8/11) Installing bootloader..."
 if [ $BOOTMANAGER==0 ];then
     echo "===> ARCH_INSTALL::     Using systemd"
-    ./systemd_install.sh
+    /arch-installer-scripts/systemd-install.sh
 elif [ $BOOTMANAGER==1 ];then
     echo "===> ARCH_INSTALL::     Using GRUB"
-    ./grub_install.sh
+    /arch-installer-scripts/grub-install.sh
 fi
 
 # get nice icon for boot menu
 echo ""
-echo "===> ARCH_INSTALL:: (11/12) Grabbing icon for Apple boot menu..."
-./boot_icon.sh
+echo "===> ARCH_INSTALL:: (9/11) Grabbing icon for Apple boot menu..."
+/arch-installer-scripts/boot_icon.sh
 
 # t2/keyboard/touchpad
 echo ""
-echo "===> ARCH_INSTALL:: (12/12) Installing additional drivers..."
-./driver-apple-ibridge.sh
-./driver-apple-bce.sh
-./config-mkinitcpio.sh
+echo "===> ARCH_INSTALL:: (10/11) Installing additional drivers..."
+/arch-installer-scripts/driver-misc.sh
+/arch-installer-scripts/driver-apple-ibridge.sh
+/arch-installer-scripts/driver-apple-bce.sh
+/arch-installer-scripts/config-mkinitcpio.sh
+
+echo ""
+echo "===> ARCH_INSTALL:: (11/11) Regenerating kernel build..."
 pacman --noconfirm -Syy linux-mbp linux-mbp-headers
 mkinitcpio -p linux-mbp -k $MBP_KERNEL
 

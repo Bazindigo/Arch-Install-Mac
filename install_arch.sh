@@ -142,21 +142,12 @@ echo ""
 echo "===> ARCH_INSTALL:: (10/12) Installing bootloader..."
 if [ $BOOTMANAGER==0 ];then
     echo "===> ARCH_INSTALL::     Using systemd"
-    declare -x SYSTEMD_RELAX_ESP_CHECKS=1
-    declare -x SYSTEMD_RELAX_XBOOTLDR_CHECKS=1
-    bootctl --path=/boot --no-variables install
-    systemctl mask systemd-boot-system-token.service
+    chmod +x systemd_install.sh
+    ./systemd_install.sh
 elif [ $BOOTMANAGER==1 ];then
     echo "===> ARCH_INSTALL::     Using GRUB"
-    touch /boot/mach_kernel
-    mkdir -p /boot/EFI/BOOT && touch /boot/EFI/BOOT/mach_kernel
-    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable
-    grub-mkconfig -o /boot/grub/grub.cfg
-    mv /boot/efi/BOOT/System /boot/
-    rm -r /boot/efi
-    sed -i 's/<plist version="1.0">/<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">' /boot/System/Library/CoreServices/SystemVersion.plist
-    sed -i 's/grub/Linux/' /boot/System/Library/CoreServices/SystemVersion.plist
-    sed -i 's/2.04/Arch Linux/' /boot/System/Library/CoreServices/SystemVersion.plist
+    chmod +x grub_install.sh
+    ./grub_install.sh
 fi
 
 # get nice icon for boot menu

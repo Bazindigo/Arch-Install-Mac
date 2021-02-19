@@ -58,7 +58,7 @@ mount $PARTITION_DEVICE /mnt
 echo ""
 echo "===> ARCH_INSTALL:: (3/12) Installing..."
 add_pacman_key
-pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel dkms grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns perl
+pacstrap /mnt linux-mbp linux-mbp-headers linux-firmware base base-devel dkms grub-efi-x86_64 zsh zsh-completions vim nano strace git efibootmgr dialog wpa_supplicant man-db wget librsvg libicns perl intel-ucode
 
 # set up pacman on new system too
 arch-chroot /mnt /bin/bash << "EOT"
@@ -134,7 +134,6 @@ echo "127.0.1.1 ${HOST_NAME}" >> /etc/hosts
 # pacman again
 echo ""
 echo "===> ARCH_INSTALL:: (9/12) Regenerating images..."
-pacman --noconfirm -Sy dkms linux-mbp linux-mbp-headers linux-firmware intel-ucode
 #mkinitcpio -p linux-mbp -k $MBP_KERNEL # try without generating here for now in interest of efficiency
 
 # set up chosen bootloader on esp
@@ -142,47 +141,24 @@ echo ""
 echo "===> ARCH_INSTALL:: (10/12) Installing bootloader..."
 if [ $BOOTMANAGER==0 ];then
     echo "===> ARCH_INSTALL::     Using systemd"
-    chmod +x systemd_install.sh
     ./systemd_install.sh
 elif [ $BOOTMANAGER==1 ];then
     echo "===> ARCH_INSTALL::     Using GRUB"
-    chmod +x grub_install.sh
     ./grub_install.sh
 fi
 
 # get nice icon for boot menu
 echo ""
 echo "===> ARCH_INSTALL:: (11/12) Grabbing icon for Apple boot menu..."
-wget -O /tmp/archlinux.svg https://archlinux.org/logos/archlinux-icon-crystal-64.svg
-rsvg-convert -w 128 -h 128 -o /tmp/archlogo.png /tmp/archlinux.svg
-png2icns /boot/.VolumeIcon.icns /tmp/archlogo.png
-rm /tmp/archlogo.png /tmp/archlinux.svg
+./boot_icon.sh
 
 # t2/keyboard/touchpad
 echo ""
 echo "===> ARCH_INSTALL:: (12/12) Installing additional drivers..."
-rm -rf /usr/src/apple-ibridge-0.1
-git clone --branch mbp15 https://github.com/roadrunner2/macbook12-spi-driver.git /usr/src/apple-ibridge-0.1
-dkms install --no-depmod -m apple-ibridge -v 0.1 -k $MBP_KERNEL
-depmod $MBP_KERNEL
-modprobe -S $MBP_KERNEL -f apple-ib-tb
-modprobe -S $MBP_KERNEL -f apple-ib-als
-
-cd /
-rm -rf /mbp2018-bridge-drv
-git clone https://github.com/MCMrARM/mbp2018-bridge-drv.git
-cd mbp2018-bridge-drv
-sed -i 's/$(shell uname -r)/$MBP_KERNEL/' Makefile
-make
-mkdir -p /usr/lib/modules/extramodules-mbp
-cp bce.ko -p /usr/lib/modules/extramodules-mbp/bce.ko # don't know if this one works vs the next line
-cp bce.ko -p /usr/lib/modules/5.8.17-1-mbp/bce.ko
-echo "bce" > /etc/modules-load.d/bce.conf
-rm -rf /mbp2018-bridge-drv
-
-sed -i 's/MODULES=()/MODULES=(bce apple-ibridge apple-ib-tb apple-ib-als)/' /etc/mkinitcpio.conf
-echo "blacklist thunderbolt" >> /etc/modprobe.d/local-blacklist.conf           # blacklist thunderbolt module directly
-echo "install thunderbolt /bin/false" >> /etc/modprobe.d/local-blacklist.conf  # run /bin/false when thunderbolt is attempting to load
+./driver-apple-ibridge.sh
+./driver-apple-bce.sh
+./config-mkinitcpio.sh
+pacman --noconfirm -Syy linux-mbp linux-mbp-headers
 mkinitcpio -p linux-mbp -k $MBP_KERNEL
 
 # TODO wifi

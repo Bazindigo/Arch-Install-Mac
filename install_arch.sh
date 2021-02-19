@@ -175,9 +175,9 @@ cd macbook12-spi-driver
 sed -i 's/KVERSION := $(KERNELRELEASE)/$MBP_KERNEL/' Makefile
 make
 modprobe -S $MBP_KERNEL -f industrialio_triggered_buffer
-insmod apple-ibridge.ko
-insmod apple-ib-tb.ko
-insmod apple-ib-als.ko
+insmod -f apple-ibridge.ko
+insmod -f apple-ib-tb.ko
+insmod -f apple-ib-als.ko
 
 cd /
 rm -rf /mbp2018-bridge-drv

@@ -1,4 +1,5 @@
 # use from chrooted env
+#sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="TODO SOMETHING WAS HERE"/GRUB_CMDLINE_LINUX_DEFAULT="rootflags=data-writeback libata.force=noncq"/' /etc/default/grub
 touch /boot/mach_kernel
 mkdir -p /boot/EFI/BOOT && touch /boot/EFI/BOOT/mach_kernel
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable
